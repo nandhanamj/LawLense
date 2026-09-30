@@ -730,9 +730,9 @@ The project follows the hackathon requirements around:
 
 ## 👥 Team
 
-**Team:** `<TEAM_NAME>`
+**Team:** `Ether`
 
-**Hackathon:** `<HACKATHON_NAME>`
+**Hackathon:** `VidyaHack48`
 
 **Repository:** `<GITHUB_URL>`
 
