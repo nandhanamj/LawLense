@@ -1,0 +1,23 @@
+# ---------- PDF Processing ----------
+docling>=2.0.0
+
+# ---------- Data Handling ----------
+pandas>=2.2.0
+
+# ---------- Progress Bar ----------
+tqdm>=4.66.0
+
+# ---------- Environment Variables ----------
+python-dotenv>=1.0.0
+
+# ---------- Embeddings ----------
+sentence-transformers>=3.0.0
+
+# ---------- Vector Database ----------
+faiss-cpu>=1.8.0
+
+# ---------- Numerical Computing ----------
+numpy>=1.26.0
+
+# ---------- JSON Validation ----------
+pydantic>=2.8.0
