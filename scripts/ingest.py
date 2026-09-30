@@ -16,7 +16,13 @@ def main():
     full_text = ""
 
     for page in doc:
-        full_text += page.get_text()
+        page_text = page.get_text()
+
+        # Stop before the publication/digital-signature metadata
+        if "UPLOADED BY THE MANAGER" in page_text:
+            page_text = page_text.split("UPLOADED BY THE MANAGER", 1)[0]
+
+        full_text += page_text
         full_text += "\n"
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
