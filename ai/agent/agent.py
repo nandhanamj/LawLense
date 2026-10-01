@@ -14,6 +14,7 @@ from ai.rag.retriever import SemanticRetriever
 from ai.schemas.response import Citation, LegalResponse
 from ai.tools.citation_validator import CitationValidator
 from ai.tools.section_lookup import lookup_section
+from ai.llm.groq_client import GroqLegalClient
 
 # Known external statutes outside the BNS corpus
 UNSUPPORTED_ACT_PATTERNS = [
@@ -49,13 +50,14 @@ class LegalAgent:
     """
 
     def __init__(
-        self,
-        retriever: Optional[SemanticRetriever] = None,
-        lookup_fn: Optional[
-            Callable[[Union[str, int], str], Optional[Dict[str, Any]]]
-        ] = None,
-        validator: Optional[CitationValidator] = None,
-    ) -> None:
+    self,
+    retriever: Optional[SemanticRetriever] = None,
+    lookup_fn: Optional[
+        Callable[[Union[str, int], str], Optional[Dict[str, Any]]]
+    ] = None,
+    validator: Optional[CitationValidator] = None,
+    llm_client: Optional[GroqLegalClient] = None,
+) -> None:
         """
         Initialize the legal agent.
 
@@ -67,6 +69,7 @@ class LegalAgent:
         self._retriever = retriever
         self.lookup_fn = lookup_fn or lookup_section
         self.validator = validator or CitationValidator(lookup_fn=self.lookup_fn)
+        self.llm_client = llm_client or GroqLegalClient()
 
     @property
     def retriever(self) -> SemanticRetriever:
@@ -127,6 +130,20 @@ class LegalAgent:
             "text of the BNS and does not constitute formal legal advice."
         )
         return "\n".join(lines)
+    def _generate_llm_answer(
+    self,
+    query: str,
+    sections: List[Dict[str, Any]],
+) -> str:
+        """Generate a natural-language answer from verified legal evidence."""
+        result = self.llm_client.generate(
+            query=query,
+            evidence=sections,
+            )
+        answer = (result.get("answer") or "").strip()
+        if not answer:
+            raise RuntimeError("LLM returned an empty answer.")
+        return answer
 
     def ask(self, query: str) -> LegalResponse:
         """
