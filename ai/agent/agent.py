@@ -50,6 +50,23 @@ FOLLOWUP_PATTERNS = [
     r"\b(?:explain\s+(?:it|this|that)|summarize\s+(?:it|this|that)|in\s+simpler\s+terms|simplify)\b",
 ]
 
+# Patterns indicating evasion of law enforcement, avoiding arrest/detection, or harmful conduct
+EVASION_HARMFUL_PATTERNS = [
+    # Evasion of getting caught / not getting caught (colloquial evasion)
+    r"\b(?:how\s+(?:do|can|to|would)\s+(?:i|we|one|someone)?\s*)?(?:avoid|evade|escape)\s+(?:getting|being)\s+caught\b",
+    r"\b(?:how\s+(?:do|can|to|would)\s+(?:i|we|one|someone)?\s*)?(?:not\s+get(?:ting)?\s+caught|without\s+getting\s+caught)\b",
+    r"\bget\s+away\s+with\s+(?:it|a\s+crime|an?\s+offen[cs]e|theft|murder|robbery|fraud|extortion|crime)\b",
+
+    # Actionable evasion of police / arrest / law enforcement / detection
+    r"\b(?:how\s+(?:do|can|to|would)\s+(?:i|we|one|someone)?\s*|ways\s+to\s+|tips\s+to\s+|help\s+me\s+)(?:avoid|evade|escape)\s+(?:arrest|police|law\s+enforcement|detection|custody)\b",
+
+    # Concealment / destruction of evidence or body
+    r"\b(?:how\s+(?:do|can|to|would)\s+(?:i|we|one|someone)?\s*|ways\s+to\s+|tips\s+to\s+|help\s+me\s+)(?:hide|destroy|disposing?\s+of|dispose\s+of|tamper\s+with)\s+(?:the\s+|an?\s+)?(?:evidence|weapon|body|crime\s+scene)\b",
+
+    # Direct requests on how to commit a crime
+    r"\b(?:how\s+(?:do|can|to)\s+(?:i|we|one|someone)\s+(?:commit|carry\s+out|execute))\s+(?:a\s+crime|an?\s+offen[cs]e|theft|murder|robbery|fraud|extortion)\b",
+]
+
 
 class LegalAgent:
     """
@@ -110,6 +127,31 @@ class LegalAgent:
         for pattern, act_name in UNSUPPORTED_ACT_PATTERNS:
             if re.search(pattern, query, re.IGNORECASE):
                 return act_name
+
+        return None
+
+    def _detect_evasion_or_harmful_request(self, query: str) -> Optional[str]:
+        """
+        Detect if the user query is seeking instructions or assistance for
+        evading law enforcement, avoiding arrest, avoiding detection, or
+        committing offences.
+        """
+        # Ensure inquiries about statutory punishment/definition are not falsely blocked
+        # e.g., "What is the punishment for evading arrest under BNS?"
+        is_statutory_inquiry = bool(
+            re.search(
+                r"\b(?:punishment|penalty|fine|sentence|term|consequence|definition|defined|what\s+is|what\s+constitutes)\b",
+                query,
+                re.IGNORECASE,
+            )
+            and re.search(r"\b(?:section|bns|under\s+the\s+act|offen[cs]e)\b", query, re.IGNORECASE)
+        )
+        if is_statutory_inquiry:
+            return None
+
+        for pattern in EVASION_HARMFUL_PATTERNS:
+            if re.search(pattern, query, re.IGNORECASE):
+                return "Requests seeking instructions or advice on evading law enforcement or avoiding detection are not supported."
 
         return None
 
@@ -303,7 +345,25 @@ class LegalAgent:
                 is_refusal=True,
             )
 
-        # 3. Check for exact section lookup route or conversational follow-up section
+        # 3. Check for harmful / evasion requests
+        evasion_refusal = self._detect_evasion_or_harmful_request(clean_query)
+        if evasion_refusal:
+            return LegalResponse(
+                query=clean_query,
+                answer=(
+                    "The LawLense assistant does not provide instructions, guidance, or advice on evading law "
+                    "enforcement, avoiding arrest, or concealing criminal offences. It is designed solely to "
+                    "provide objective statutory information from the Bharatiya Nyaya Sanhita, 2023 (BNS).\n\n"
+                    "Disclaimer: This response provides objective legal information from the statutory text "
+                    "of the BNS and does not constitute formal legal advice."
+                ),
+                supported=False,
+                citations=[],
+                refusal_reason=evasion_refusal,
+                is_refusal=True,
+            )
+
+        # 4. Check for exact section lookup route or conversational follow-up section
         exact_section = self._extract_exact_section(clean_query)
         if not exact_section and conversation_history:
             exact_section = self._resolve_conversational_section(clean_query, conversation_history)
