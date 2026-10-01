@@ -30,6 +30,10 @@ Thumbs.db
 data/processed/
 eval/results/
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # Secrets
 *.pem
 *.key
