@@ -51,7 +51,7 @@ Section lookup, semantic retrieval, and citation validation provide deterministi
 
 ## LLM Generation and Fallback
 
-LawLense uses Groq's `openai/gpt-oss-20b` only after BNS evidence has been retrieved and verified. Its prompt grounds the answer in the supplied statutory text and instructs the model not to invent provisions or citations. Recent conversation messages may be included as dialogue context, but are explicitly not legal evidence. Generated content is informational, not personalized legal advice. If Groq fails or returns an empty answer, the agent displays the verified statutory text instead; provider exceptions are logged internally and are not exposed directly to users. The client logs the model, prompt/completion/total token counts, latency, and cost information when pricing is configured. Cost/query is N/A because pricing for this model is not configured.
+LawLense uses Groq's `openai/gpt-oss-20b` only after BNS evidence has been retrieved and verified. Its prompt grounds the answer in the supplied statutory text and instructs the model not to invent provisions or citations. Recent conversation messages may be included as dialogue context, but are explicitly not legal evidence. Generated content is informational, not personalized legal advice. If Groq fails or returns an empty answer, the agent displays the verified statutory text instead; provider exceptions are logged internally and are not exposed directly to users. The client logs the model, prompt/completion/total token counts, latency, and cost information. Groq pricing for `openai/gpt-oss-20b` is configured at $0.075 per 1M prompt tokens and $0.30 per 1M completion tokens, yielding a measured evaluation cost of $0.000146 per query.
 
 ## Guardrails and Validation
 
@@ -152,7 +152,7 @@ Run `python manage.py seed_bns` from `backend`. The command loads `data/processe
 
 ## Evaluation
 
-The latest evaluation is the 20-question BNS set recorded in `reports/evaluation_results.json` and `reports/evaluation_report.md` (timestamp `2026-10-01T08:44:52Z`). These are evaluation-set measurements, not a guarantee of legal correctness or production performance.
+The latest evaluation is the 20-question BNS set recorded in `reports/evaluation_results.json` and `reports/evaluation_report.md` (timestamp `2026-10-01T09:25:31Z`). These are evaluation-set measurements, not a guarantee of legal correctness or production performance.
 
 | Measure | Recorded result |
 | --- | ---: |
@@ -164,11 +164,11 @@ The latest evaluation is the 20-question BNS set recorded in `reports/evaluation
 | Citation presence on supported answers | 100% |
 | Citation validity | 100% (35/35) |
 | Fabricated citations | 0 |
-| Cost/query | N/A (pricing for `openai/gpt-oss-20b` is not configured) |
-| Average latency | 5.952 s |
-| P50 latency | 1.056 s (target <2 s: met) |
-| P95 latency | 22.375 s (target <5 s: not met) |
-| Total latency | 119.04 s |
+| Cost/query | $0.000146 (configured: $0.075/1M prompt, $0.30/1M completion) |
+| Average latency | 6.564 s |
+| P50 latency | 1.477 s (target <2 s: met) |
+| P95 latency | 22.533 s (target <5 s: not met) |
+| Total latency | 131.272 s |
 
 The average-latency target of <3 seconds was **not met**. P50 and P95 are measurements from this 20-question evaluation set.
 
@@ -200,7 +200,7 @@ The current Django conversation test suite contains 8 tests; all 8 pass.
 5. Ask for Section 999 and an unsupported statute such as IPC or the Companies Act; show the refusal and absence of verified citations.
 6. Ask "How do I avoid getting caught?" and show the deterministic refusal with zero citations and no evasion guidance.
 7. Demonstrate the verified-statutory-text fallback if Groq generation fails or returns an empty response.
-8. Show citations, token/latency/cost logging (cost is N/A while pricing is unconfigured), and the evaluation metrics above.
+8. Show citations, token/latency/cost logging (configured at $0.075/1M prompt, $0.30/1M completion; ~$0.000146/query), and the evaluation metrics above.
 
 ## Project Structure
 

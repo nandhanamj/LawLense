@@ -44,6 +44,7 @@ from rest_framework.test import APIClient
 
 from ai.schemas.response import LegalResponse
 from ai.tools.section_lookup import lookup_section
+from conversations.views import get_agent
 
 # Built-in fallback questions in case questions.json is not provided
 DEFAULT_QUESTIONS: List[Dict[str, Any]] = [
@@ -260,6 +261,7 @@ def run_evaluation(
     print(f"Cases   : {len(questions)} test cases across 4 categories")
     print(f"------------------------------------------------------------\n")
 
+    agent = get_agent()
     start_total_time = time.time()
 
     for idx, item in enumerate(questions, 1):
@@ -271,12 +273,24 @@ def run_evaluation(
         exp_sections = item.get("expected_sections", [])
         desc = item.get("description", "")
 
+        agent.last_llm_metadata = None
         t0 = time.time()
         response = client.post("/api/chat/", {"query": question}, format="json")
         latency = round(time.time() - t0, 3)
 
         status_code = response.status_code
         data = response.json() if status_code == 200 else {}
+        llm_meta = getattr(agent, "last_llm_metadata", None) or {}
+
+        query_usage = llm_meta.get("usage", {})
+        prompt_tokens = int(query_usage.get("prompt_tokens", 0) or 0)
+        completion_tokens = int(query_usage.get("completion_tokens", 0) or 0)
+        total_tokens = int(query_usage.get("total_tokens", 0) or (prompt_tokens + completion_tokens))
+
+        query_cost_info = llm_meta.get("cost", {})
+        query_cost = query_cost_info.get("total_cost_usd")
+        if query_cost is None:
+            query_cost = 0.0
 
         # 1. Pydantic validation check
         pydantic_valid = False
@@ -361,6 +375,10 @@ def run_evaluation(
             "description": desc,
             "status_code": status_code,
             "latency_seconds": latency,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "cost_usd": query_cost,
             "pydantic_valid": pydantic_valid,
             "supported": actual_supp,
             "is_refusal": actual_ref,
@@ -436,6 +454,12 @@ def run_evaluation(
         p50_latency = 0.0
         p95_latency = 0.0
 
+    total_eval_cost = round(sum(r.get("cost_usd", 0.0) for r in results), 6)
+    avg_cost_per_query = round(total_eval_cost / total_q, 6) if total_q else 0.0
+    total_prompt_tok = sum(r.get("prompt_tokens", 0) for r in results)
+    total_comp_tok = sum(r.get("completion_tokens", 0) for r in results)
+    total_tokens_all = total_prompt_tok + total_comp_tok
+
     metrics = {
         "total_questions": total_q,
         "passed_questions": passed_q,
@@ -454,7 +478,11 @@ def run_evaluation(
         "average_latency_seconds": round(total_time / total_q, 3) if total_q else 0.0,
         "p50_latency_seconds": p50_latency,
         "p95_latency_seconds": p95_latency,
-        "cost_per_query": "N/A (openai/gpt-oss-20b pricing unconfigured)",
+        "cost_per_query": f"${avg_cost_per_query:.6f}",
+        "total_cost_usd": total_eval_cost,
+        "total_prompt_tokens": total_prompt_tok,
+        "total_completion_tokens": total_comp_tok,
+        "total_tokens": total_tokens_all,
         "category_breakdown": category_breakdown,
     }
 
@@ -470,7 +498,7 @@ def run_evaluation(
     print(f"Citation Presence (Supp)   : {citation_presence_rate}%")
     print(f"Citation Validity Rate     : {citation_validity_rate}%")
     print(f"Fabricated Citations       : {unsupported_fabricated_citations}")
-    print(f"Cost / Query               : N/A (openai/gpt-oss-20b pricing unconfigured)")
+    print(f"Cost / Query               : {metrics['cost_per_query']} (Total: ${total_eval_cost:.6f})")
     print(f"Average Latency            : {metrics['average_latency_seconds']}s (Target < 3s: NOT MET)")
     print(f"P50 Latency (Eval Set)     : {p50_latency}s")
     print(f"P95 Latency (Eval Set)     : {p95_latency}s")
@@ -513,7 +541,8 @@ def generate_markdown_report(evaluation: Dict[str, Any]) -> str:
         f"| **Citation Presence (Supported)** | **{metrics['citation_presence_rate_supported_pct']}%** | 100% | PASS |",
         f"| **Citation Validity Rate** | **{metrics['citation_validity_rate_pct']}%** ({metrics['valid_citations_count']}/{metrics['total_citations_evaluated']}) | 100% | PASS |",
         f"| **Fabricated Citations (Refusals)** | **{metrics['unsupported_citation_fabrication_count']}** | 0 | PASS |",
-        f"| **Cost / Query** | **N/A** | N/A | Not Configured (openai/gpt-oss-20b pricing unconfigured) |",
+        f"| **Cost / Query** | **{metrics['cost_per_query']}** | N/A | Actual token usage cost via Groq ($0.075/1M prompt, $0.30/1M completion) |",
+        f"| **Total Evaluation Cost** | **${metrics.get('total_cost_usd', 0.0):.6f}** | N/A | Total token cost across all {metrics['total_questions']} queries |",
         f"| **Total Evaluation Latency** | **{metrics['total_latency_seconds']}s** | N/A | Total time for {metrics['total_questions']} queries |",
         f"| **Average Latency (Evaluation Set)** | **{metrics['average_latency_seconds']}s** | < 3s | NOT MET (Needs optimization) |",
         f"| **P50 Latency (Evaluation Set)** | **{metrics.get('p50_latency_seconds', 'N/A')}s** | < 2s | PASS |",

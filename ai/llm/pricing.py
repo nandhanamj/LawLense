@@ -21,8 +21,8 @@ from typing import Any, Dict, Optional
 MODEL_PRICING: Dict[str, Dict[str, Optional[float]]] = {
     # openai/gpt-oss-20b on Groq
     "openai/gpt-oss-20b": {
-        "prompt_cost_per_million": None,
-        "completion_cost_per_million": None,
+        "prompt_cost_per_million": 0.075,
+        "completion_cost_per_million": 0.30,
     },
     # Reference rates for standard Groq production models (USD per 1M tokens)
     "llama-3.3-70b-versatile": {
