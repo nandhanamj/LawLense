@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scale, BookOpen, ShieldCheck, Database, ArrowRight } from 'lucide-react';
+import { Scale, BookOpen, ShieldCheck, Search, Sparkles, ArrowRight } from 'lucide-react';
 
 interface HeroLandingProps {
   onSelectQuery: (query: string) => void;
@@ -46,34 +46,43 @@ export const HeroLanding: React.FC<HeroLandingProps> = ({ onSelectQuery }) => {
       </div>
 
       <div className="hero-text-content">
-        <h2 className="hero-headline">Ask LawLens</h2>
+        <p className="hero-eyebrow">BNS LEGAL RESEARCH WORKSPACE</p>
+        <h2 className="hero-headline">Legal clarity, grounded in the BNS.</h2>
         <p className="hero-tagline">
-          Evidence-backed legal information from the Bharatiya Nyaya Sanhita, 2023.
+          AI-powered legal information assistant based on the Bharatiya Nyaya Sanhita, 2023.
         </p>
       </div>
 
       <div className="hero-pillars">
         <div className="pillar-item">
-          <Database size={16} className="pillar-icon" aria-hidden="true" />
+          <Search size={18} className="pillar-icon" aria-hidden="true" />
           <div className="pillar-text">
-            <strong>Deterministic Lookup</strong>
-            <span>Exact BNS section mapping</span>
+            <strong>Legal RAG Search</strong>
+            <span>Find relevant statutory provisions</span>
           </div>
         </div>
 
         <div className="pillar-item">
-          <BookOpen size={16} className="pillar-icon" aria-hidden="true" />
+          <BookOpen size={18} className="pillar-icon" aria-hidden="true" />
           <div className="pillar-text">
-            <strong>Semantic Retrieval</strong>
-            <span>Search across 358 BNS sections</span>
+            <strong>BNS Section Retrieval</strong>
+            <span>Explore the 2023 statutory corpus</span>
           </div>
         </div>
 
         <div className="pillar-item">
-          <ShieldCheck size={16} className="pillar-icon" aria-hidden="true" />
+          <ShieldCheck size={18} className="pillar-icon" aria-hidden="true" />
           <div className="pillar-text">
-            <strong>Citation Validation</strong>
-            <span>Every citation verified against the BNS corpus</span>
+            <strong>Verified Citations</strong>
+            <span>Answers linked to statutory evidence</span>
+          </div>
+        </div>
+
+        <div className="pillar-item">
+          <Sparkles size={18} className="pillar-icon" aria-hidden="true" />
+          <div className="pillar-text">
+            <strong>AI Legal Assistance</strong>
+            <span>Ask clear questions in natural language</span>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scale, RotateCcw } from 'lucide-react';
+import { Scale, RotateCcw, Sparkles } from 'lucide-react';
 
 interface HeaderProps {
   onNewConversation: () => void;
@@ -29,6 +29,13 @@ export const Header: React.FC<HeaderProps> = ({
             </p>
           </div>
         </div>
+
+        <nav className="header-nav" aria-label="Current workspace">
+          <span className="header-nav-item active" aria-current="page">
+            <Sparkles size={15} aria-hidden="true" />
+            <span>Legal assistant</span>
+          </span>
+        </nav>
 
         <div className="header-actions">
           {conversationId && (
