@@ -21,3 +21,6 @@ numpy>=1.26.0
 
 # ---------- JSON Validation ----------
 pydantic>=2.8.0
+
+# ---------- LLM Provider ----------
+groq>=0.9.0

@@ -7,6 +7,7 @@ to produce validated, grounded LegalResponse outputs conforming to Pydantic sche
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -14,6 +15,9 @@ from ai.rag.retriever import SemanticRetriever
 from ai.schemas.response import Citation, LegalResponse
 from ai.tools.citation_validator import CitationValidator
 from ai.tools.section_lookup import lookup_section
+from ai.llm.groq_client import GroqLegalClient
+
+logger = logging.getLogger(__name__)
 
 # Known external statutes outside the BNS corpus
 UNSUPPORTED_ACT_PATTERNS = [
@@ -55,6 +59,7 @@ class LegalAgent:
             Callable[[Union[str, int], str], Optional[Dict[str, Any]]]
         ] = None,
         validator: Optional[CitationValidator] = None,
+        llm_client: Optional[GroqLegalClient] = None,
     ) -> None:
         """
         Initialize the legal agent.
@@ -63,10 +68,20 @@ class LegalAgent:
             retriever: Optional SemanticRetriever instance (lazy loaded if None).
             lookup_fn: Optional section lookup callable (defaults to lookup_section).
             validator: Optional CitationValidator instance (defaults to CitationValidator with lookup_fn).
+            llm_client: Optional GroqLegalClient instance (lazy loaded if None).
         """
         self._retriever = retriever
         self.lookup_fn = lookup_fn or lookup_section
         self.validator = validator or CitationValidator(lookup_fn=self.lookup_fn)
+        self._llm_client = llm_client
+        self.last_llm_metadata: Optional[Dict[str, Any]] = None
+
+    @property
+    def llm_client(self) -> GroqLegalClient:
+        """Lazy load Groq LLM client."""
+        if self._llm_client is None:
+            self._llm_client = GroqLegalClient()
+        return self._llm_client
 
     @property
     def retriever(self) -> SemanticRetriever:
@@ -127,6 +142,65 @@ class LegalAgent:
             "text of the BNS and does not constitute formal legal advice."
         )
         return "\n".join(lines)
+    def _generate_llm_answer(
+        self,
+        query: str,
+        sections: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Generate a natural-language answer from verified legal evidence via Groq LLM.
+        Captures token counts, latency, and cost info in self.last_llm_metadata.
+        """
+        try:
+            result = self.llm_client.generate(query=query, evidence=sections)
+            self.last_llm_metadata = result
+            return result
+        except Exception as err:
+            logger.error("Failed to invoke Groq LLM: %s", err)
+            fallback_res = {
+                "answer": "",
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                "cost": {"total_cost_usd": None, "pricing_configured": False},
+                "model": getattr(self.llm_client, "model", "openai/gpt-oss-20b"),
+                "latency_seconds": 0.0,
+                "success": False,
+                "error": str(err),
+            }
+            self.last_llm_metadata = fallback_res
+            return fallback_res
+
+    def _generate_grounded_response_text(
+        self,
+        query: str,
+        verified_sections: List[Dict[str, Any]],
+    ) -> str:
+        """
+        Generate natural-language explanation using Groq LLM backed by verified BNS evidence.
+        Falls back safely to structured statutory text if Groq fails or returns empty.
+        """
+        llm_res = self._generate_llm_answer(query=query, sections=verified_sections)
+        llm_answer = (llm_res.get("answer") or "").strip()
+
+        if llm_res.get("success") and llm_answer:
+            # Ensure statutory disclaimer is present in the response
+            if "does not constitute formal legal advice" not in llm_answer.lower():
+                llm_answer = (
+                    f"{llm_answer}\n\nDisclaimer: This response provides objective legal "
+                    f"information from the statutory text of the BNS and does not constitute formal legal advice."
+                )
+            return llm_answer
+
+        # Fallback if Groq call failed or returned empty
+        err_msg = llm_res.get("error") or "Language generation returned an empty response."
+        logger.warning(
+            "Groq language generation failed (%s). Falling back to verified statutory text.",
+            err_msg,
+        )
+        grounded_fallback = self._format_grounded_answer(verified_sections)
+        return (
+            "Note: Language generation service was unavailable. "
+            f"Displaying verified statutory text fallback.\n\n{grounded_fallback}"
+        )
 
     def ask(self, query: str) -> LegalResponse:
         """
@@ -227,8 +301,8 @@ class LegalAgent:
                     is_refusal=True,
                 )
 
-            # Validated exact section answer
-            grounded_answer = self._format_grounded_answer([db_record])
+            # Validated exact section answer via Groq LLM (with fallback to statutory text)
+            grounded_answer = self._generate_grounded_response_text(clean_query, [db_record])
             return LegalResponse(
                 query=clean_query,
                 answer=grounded_answer,
@@ -328,7 +402,8 @@ class LegalAgent:
             s for s in verified_sections if str(s.get("section", "")).strip() in valid_sec_numbers
         ]
 
-        grounded_answer = self._format_grounded_answer(final_sections)
+        # Validated semantic retrieval answer via Groq LLM (with fallback to statutory text)
+        grounded_answer = self._generate_grounded_response_text(clean_query, final_sections)
 
         return LegalResponse(
             query=clean_query,
