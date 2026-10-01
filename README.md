@@ -204,9 +204,9 @@ The user interface in `frontend/` is a lightweight Single-Page Application (SPA)
 
 ## Docker & Container Architecture
 
-- **`Dockerfile`**: Single-stage build based on `python:3.11-slim` installing MySQL client and build dependencies, PyMuPDF, and project requirements.
+- **`Dockerfile`**: Single-stage build based on `python:3.11-slim` installing MySQL client and build dependencies, pre-installing CPU-only PyTorch (`--index-url https://download.pytorch.org/whl/cpu`) to avoid multi-gigabyte CUDA/NVIDIA packages, PyMuPDF, and project requirements.
 - **`docker-compose.yml`**: Defines two services:
-  - `db`: MySQL 8.0 with persistent volume storage and health checks.
+  - `mysql`: MySQL 8.0 with persistent volume storage and health checks.
   - `web`: Django application container waiting on MySQL health before starting.
 - **`docker/entrypoint.sh`**: Verifies database connectivity, executes database migrations, seeds BNS sections if missing, and starts the server.
 

@@ -510,7 +510,7 @@ flowchart LR
     Entrypoint -->|Healthcheck Wait| MySQLD
 ```
 
-- **`Dockerfile`**: Single-stage build based on `python:3.11-slim` installing system packages needed for `mysqlclient` and `PyMuPDF` (`build-essential`, `pkg-config`, `default-libmysqlclient-dev`, `curl`, `libgl1`, `libglib2.0-0`).
+- **`Dockerfile`**: Single-stage build based on `python:3.11-slim` installing system packages needed for `mysqlclient` and `PyMuPDF` (`build-essential`, `pkg-config`, `default-libmysqlclient-dev`, `curl`, `libgl1`, `libglib2.0-0`), followed by pre-installing CPU-only PyTorch (`--index-url https://download.pytorch.org/whl/cpu`) prior to `requirements.txt` to prevent pulling >5 GB of CUDA/NVIDIA GPU runtime packages.
 - **`docker/entrypoint.sh`**:
   1. Polls MySQL port 3306 until accepting connections.
   2. Executes `python manage.py migrate`.

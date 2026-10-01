@@ -28,8 +28,9 @@ WORKDIR /app
 # Copy dependency specifications first to leverage Docker layer caching
 COPY requirements.txt /app/
 
-# Upgrade pip and install Python dependencies
+# Upgrade pip and install CPU-only PyTorch first, then install remaining dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --default-timeout=120 torch --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy project source code into container
