@@ -1,5 +1,5 @@
 """
-Pricing configuration and cost calculation for LawLense LLM usage.
+Pricing configuration and cost calculation for LawLens LLM usage.
 
 Pricing is defined per 1,000,000 tokens (USD).
 Rates can be configured statically in MODEL_PRICING or dynamically via environment variables:

@@ -10,7 +10,7 @@ import json
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-# Resolve project root (3 levels up: ai/rag/retriever.py -> ai/rag -> ai -> LawLense)
+# Resolve project root (3 levels up: ai/rag/retriever.py -> ai/rag -> ai -> LawLens)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 

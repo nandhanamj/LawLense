@@ -1,5 +1,5 @@
 """
-AI layer schema definitions for the LawLense legal assistant.
+AI layer schema definitions for the LawLens legal assistant.
 """
 
 from ai.schemas.response import (

@@ -1,5 +1,5 @@
 """
-Citation validation tool for the LawLense legal chatbot guardrail.
+Citation validation tool for the LawLens legal chatbot guardrail.
 
 Verifies that citations generated in legal responses deterministically exist
 in the legal corpus via SectionLookup and that supporting evidence matches.

@@ -1,5 +1,5 @@
 """
-Groq LLM client for LawLense.
+Groq LLM client for LawLens.
 
 The LLM is responsible only for turning verified BNS evidence
 into a natural-language explanation. Legal facts and citations
@@ -103,7 +103,7 @@ class GroqLegalClient:
                     + "\n\n"
                 )
 
-        system_prompt = """You are the language-generation component of LawLense.
+        system_prompt = """You are the language-generation component of LawLens.
 
 Your job is to explain Indian legal information using ONLY the verified
 Bharatiya Nyaya Sanhita (BNS) evidence supplied by the application.

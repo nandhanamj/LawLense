@@ -1,5 +1,5 @@
 """
-Legal chatbot agent for LawLense.
+Legal chatbot agent for LawLens.
 
 Connects SemanticRetriever, deterministic section lookup, and CitationValidator
 to produce validated, grounded LegalResponse outputs conforming to Pydantic schemas.
@@ -335,7 +335,7 @@ class LegalAgent:
             return LegalResponse(
                 query=clean_query,
                 answer=(
-                    f"The LawLense assistant currently only supports provisions from the "
+                    f"The LawLens assistant currently only supports provisions from the "
                     f"Bharatiya Nyaya Sanhita, 2023 (BNS). The requested statute ({unsupported_act}) "
                     f"is not present in our legal corpus."
                 ),
@@ -351,7 +351,7 @@ class LegalAgent:
             return LegalResponse(
                 query=clean_query,
                 answer=(
-                    "The LawLense assistant does not provide instructions, guidance, or advice on evading law "
+                    "The LawLens assistant does not provide instructions, guidance, or advice on evading law "
                     "enforcement, avoiding arrest, or concealing criminal offences. It is designed solely to "
                     "provide objective statutory information from the Bharatiya Nyaya Sanhita, 2023 (BNS).\n\n"
                     "Disclaimer: This response provides objective legal information from the statutory text "

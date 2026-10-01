@@ -1,5 +1,5 @@
 """
-RAG (Retrieval-Augmented Generation) package for LawLense.
+RAG (Retrieval-Augmented Generation) package for LawLens.
 """
 
 from ai.rag.retriever import SemanticRetriever

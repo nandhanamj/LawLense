@@ -1,5 +1,5 @@
 # ==============================================================================
-# LawLense Dockerfile
+# LawLens Dockerfile
 # Production-like slim image for development, testing, and demo
 # Python 3.11 with system headers for mysqlclient and PyMuPDF
 # ==============================================================================

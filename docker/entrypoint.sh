@@ -2,7 +2,7 @@
 set -e
 
 echo "============================================================"
-echo "LawLense Container Startup Initialization"
+echo "LawLens Container Startup Initialization"
 echo "============================================================"
 
 # Ensure data directories exist
@@ -94,7 +94,7 @@ python backend/manage.py seed_bns
 # 6. Start the requested command or default to runserver
 # -------------------------------------------------------------
 echo "============================================================"
-echo "LawLense Initialization Complete. Starting Application."
+echo "LawLens Initialization Complete. Starting Application."
 echo "============================================================"
 
 if [ $# -eq 0 ]; then

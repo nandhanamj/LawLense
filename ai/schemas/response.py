@@ -1,5 +1,5 @@
 """
-Response and citation schemas for the LawLense AI layer.
+Response and citation schemas for the LawLens AI layer.
 
 Defines structured Pydantic models for legal assistant responses,
 ensuring grounding, citation consistency, and safe refusal states.
@@ -112,7 +112,7 @@ class Citation(BaseModel):
 
 class LegalResponse(BaseModel):
     """
-    Structured response contract for the LawLense legal assistant.
+    Structured response contract for the LawLens legal assistant.
 
     Enforces that:
     1. An answer cannot claim to be supported without citations.

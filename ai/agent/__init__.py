@@ -1,4 +1,4 @@
-"""Legal agent package for LawLense."""
+"""Legal agent package for LawLens."""
 
 from ai.agent.agent import LegalAgent
 
