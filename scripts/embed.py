@@ -1,5 +1,15 @@
+"""
+Embedding Generation Script for the BNS Legal Corpus.
+
+Generates normalized sentence embeddings using multilingual-e5-base and saves
+both compressed vector embeddings (.npz) and rich metadata (.json).
+"""
+
+from __future__ import annotations
+
 import json
 from pathlib import Path
+from typing import Any, Dict, List
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
@@ -12,20 +22,25 @@ METADATA_OUTPUT_FILE = BASE_DIR / "data" / "processed" / "bns_metadata.json"
 MODEL_NAME = "intfloat/multilingual-e5-base"
 
 
-def create_passage_text(section: dict) -> str:
+def create_passage_text(section: Dict[str, Any]) -> str:
     """Format section data into an E5 retrieval passage text."""
     act = section.get("act", "BNS")
     chapter = section.get("chapter", "")
     chapter_title = section.get("chapter_title", "")
-    sec_num = section.get("section", "")
+    category = section.get("offence_category") or chapter_title
+    sec_num = str(section.get("section", ""))
+    title = section.get("title", "")
+    keywords = section.get("keywords", [])
     content = section.get("content", "").strip()
 
     header_parts = [f"Act: {act}"]
     if chapter:
-        header_parts.append(f"Chapter {chapter}" + (f" - {chapter_title}" if chapter_title else ""))
-    header_parts.append(f"Section {sec_num}")
+        header_parts.append(f"Chapter {chapter}" + (f" - {category}" if category else ""))
+    header_parts.append(f"Section {sec_num}" + (f": {title}" if title else ""))
+    if keywords:
+        header_parts.append(f"Keywords: {', '.join(keywords)}")
 
-    header = ", ".join(header_parts)
+    header = " | ".join(header_parts)
     return f"passage: {header}\n{content}"
 
 
@@ -42,7 +57,6 @@ def main():
     total_sections = len(sections)
     print(f"Total sections loaded: {total_sections}")
 
-    # Prepare texts to embed and preserve mapping
     texts_to_embed = []
     metadata = []
     section_numbers = []
@@ -51,16 +65,22 @@ def main():
         passage_text = create_passage_text(sec)
         texts_to_embed.append(passage_text)
 
+        sec_num = str(sec.get("section_number") or sec.get("section", ""))
         metadata.append({
             "index": idx,
+            "section_number": sec_num,
+            "section": sec_num,
             "act": sec.get("act", "BNS"),
+            "statute": sec.get("statute", "BNS"),
             "chapter": sec.get("chapter", ""),
             "chapter_title": sec.get("chapter_title", ""),
-            "section": sec.get("section", ""),
+            "offence_category": sec.get("offence_category", sec.get("chapter_title", "")),
+            "title": sec.get("title", ""),
+            "keywords": sec.get("keywords", []),
             "content": sec.get("content", ""),
             "embed_text": passage_text,
         })
-        section_numbers.append(str(sec.get("section", "")))
+        section_numbers.append(sec_num)
 
     print(f"Loading embedding model: {MODEL_NAME}...")
     model = SentenceTransformer(MODEL_NAME)
@@ -74,17 +94,14 @@ def main():
     )
     embeddings = np.array(embeddings, dtype=np.float32)
 
-    # Ensure output directory exists
     EMBEDDINGS_OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    # Save embeddings to .npz
     np.savez_compressed(
         EMBEDDINGS_OUTPUT_FILE,
         embeddings=embeddings,
         section_numbers=np.array(section_numbers),
     )
 
-    # Save metadata to .json
     with open(METADATA_OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=4, ensure_ascii=False)
 
