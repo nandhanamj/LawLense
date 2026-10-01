@@ -1,26 +1,16 @@
-# ---------- PDF Processing ----------
-docling>=2.0.0
+Django==5.2.17
+djangorestframework==3.18.1
+mysqlclient==2.3.0
 
-# ---------- Data Handling ----------
+python-dotenv>=1.0.0
+pymupdf>=1.24.0
+
+numpy>=1.26.0
 pandas>=2.2.0
-
-# ---------- Progress Bar ----------
 tqdm>=4.66.0
 
-# ---------- Environment Variables ----------
-python-dotenv>=1.0.0
-
-# ---------- Embeddings ----------
-sentence-transformers>=3.0.0
-
-# ---------- Vector Database ----------
+sentence-transformers==6.1.0
 faiss-cpu>=1.8.0
 
-# ---------- Numerical Computing ----------
-numpy>=1.26.0
-
-# ---------- JSON Validation ----------
 pydantic>=2.8.0
-
-# ---------- LLM Provider ----------
 groq>=0.9.0

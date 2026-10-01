@@ -1,0 +1,47 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: lawlense-mysql
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: lawlense
+      MYSQL_USER: lawlense
+      MYSQL_PASSWORD: lawlense_password
+      MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lawlense-web
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_NAME: lawlense
+      DB_USER: lawlense
+      DB_PASSWORD: lawlense_password
+      DB_HOST: mysql
+      DB_PORT: 3306
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /app/.venv
+      - hf_cache:/root/.cache
+
+volumes:
+  mysql_data:
+  hf_cache:
