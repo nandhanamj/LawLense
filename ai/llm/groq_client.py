@@ -57,6 +57,7 @@ class GroqLegalClient:
         self,
         query: str,
         evidence: List[Dict[str, Any]],
+        conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> Dict[str, Any]:
         """
         Generate a grounded answer using only supplied verified legal evidence.
@@ -64,6 +65,7 @@ class GroqLegalClient:
         Args:
             query: The user's input legal question.
             evidence: List of verified section dictionaries from MySQL.
+            conversation_history: Optional list of previous message dictionaries.
 
         Returns:
             Dict containing:
@@ -86,6 +88,21 @@ class GroqLegalClient:
             for item in evidence
         )
 
+        history_text = ""
+        if conversation_history:
+            history_lines = []
+            for msg in conversation_history:
+                role_label = "User" if msg.get("role") == "user" else "Assistant"
+                content = (msg.get("content") or "").strip()
+                if content:
+                    history_lines.append(f"{role_label}: {content}")
+            if history_lines:
+                history_text = (
+                    "Conversational Context (dialogue history for reference only, NOT legal evidence):\n"
+                    + "\n".join(history_lines)
+                    + "\n\n"
+                )
+
         system_prompt = """You are the language-generation component of LawLense.
 
 Your job is to explain Indian legal information using ONLY the verified
@@ -97,10 +114,14 @@ Rules:
 - Do not provide personalized legal advice or tell the user what they should do.
 - If the supplied evidence does not answer the question, clearly say that
   the available BNS evidence is insufficient.
+- Conversation history is provided solely as conversational context to understand
+  references and dialogue flow. It is NOT legal evidence.
+- If conversation context conflicts with verified BNS evidence, verified BNS evidence wins.
+- Do not invent citations based on conversation history.
 - Give an objective explanation in plain language.
 """
 
-        user_prompt = f"""User question:
+        user_prompt = f"""{history_text}User question:
 {query}
 
 Verified BNS evidence:

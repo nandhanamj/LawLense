@@ -60,10 +60,20 @@ class ChatAPIView(APIView):
             or serializer.validated_data.get("session_id")
         )
 
-        # 1. Resolve or create Conversation
+        # 1. Resolve or create Conversation and retrieve previous history
+        conversation_history = []
         if supplied_session_id:
             try:
                 conversation = Conversation.objects.get(session_id=supplied_session_id)
+                # Bounded history (most recent 8 messages, ordered chronologically)
+                recent_msgs = list(
+                    conversation.messages.order_by("-created_at")[:8]
+                )
+                recent_msgs.reverse()
+                conversation_history = [
+                    {"role": msg.role, "content": msg.content}
+                    for msg in recent_msgs
+                ]
             except Conversation.DoesNotExist:
                 return Response(
                     {"error": f"Conversation with ID '{supplied_session_id}' not found."},
@@ -79,10 +89,10 @@ class ChatAPIView(APIView):
             content=clean_query,
         )
 
-        # 3. Process query with LegalAgent
+        # 3. Process query with LegalAgent including conversation history
         try:
             agent = get_agent()
-            legal_response = agent.ask(clean_query)
+            legal_response = agent.ask(clean_query, conversation_history=conversation_history)
         except Exception as err:
             logger.exception("Unexpected error in LegalAgent execution: %s", err)
             return Response(

@@ -39,6 +39,17 @@ UNSUPPORTED_ACT_PATTERNS = [
     (r"\b(?:Arbitration(?:\s+and\s+Conciliation)?\s+Act)\b", "Arbitration Act"),
 ]
 
+# Patterns indicating anaphoric follow-up referencing prior conversation
+FOLLOWUP_PATTERNS = [
+    r"\b(?:what|which)\s+section\s+(?:did\s+i|was\s+that|were\s+we|was\s+i|am\s+i)\b",
+    r"\b(?:what\s+section\s+did\s+i\s+(?:just\s+)?ask)\b",
+    r"\b(?:just\s+(?:ask(?:ed)?|inquir(?:ed)?|mention(?:ed)?))\b",
+    r"\b(?:previous(?:ly)?|prior|earlier|above|last\s+question)\b",
+    r"\b(?:that|the|this)\s+(?:section|provision|offence|offense|act)\b",
+    r"\b(?:under\s+(?:it|that|this)|about\s+(?:it|that|this)|for\s+(?:it|that|this))\b",
+    r"\b(?:explain\s+(?:it|this|that)|summarize\s+(?:it|this|that)|in\s+simpler\s+terms|simplify)\b",
+]
+
 
 class LegalAgent:
     """
@@ -142,17 +153,58 @@ class LegalAgent:
             "text of the BNS and does not constitute formal legal advice."
         )
         return "\n".join(lines)
+    def _resolve_conversational_section(
+        self,
+        query: str,
+        conversation_history: Optional[List[Dict[str, str]]],
+    ) -> Optional[str]:
+        """
+        If the query is a follow-up referencing prior conversation or anaphora,
+        resolve the referenced section from conversation history.
+        """
+        if not conversation_history:
+            return None
+
+        is_followup = any(
+            re.search(pat, query, re.IGNORECASE) for pat in FOLLOWUP_PATTERNS
+        )
+        if not is_followup:
+            return None
+
+        for msg in reversed(conversation_history):
+            content = msg.get("content", "")
+            matches = re.findall(
+                r"\b(?:section|sec\.?|s\.)\s*(\d+[a-zA-Z]?)\b",
+                content,
+                re.IGNORECASE,
+            )
+            for sec_str in reversed(matches):
+                sec_candidate = sec_str.upper()
+                try:
+                    sec_int = int(re.sub(r"[a-zA-Z]", "", sec_candidate))
+                    if 1 <= sec_int <= 358:
+                        return sec_candidate
+                except ValueError:
+                    continue
+
+        return None
+
     def _generate_llm_answer(
         self,
         query: str,
         sections: List[Dict[str, Any]],
+        conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> Dict[str, Any]:
         """
         Generate a natural-language answer from verified legal evidence via Groq LLM.
         Captures token counts, latency, and cost info in self.last_llm_metadata.
         """
         try:
-            result = self.llm_client.generate(query=query, evidence=sections)
+            result = self.llm_client.generate(
+                query=query,
+                evidence=sections,
+                conversation_history=conversation_history,
+            )
             self.last_llm_metadata = result
             return result
         except Exception as err:
@@ -173,12 +225,17 @@ class LegalAgent:
         self,
         query: str,
         verified_sections: List[Dict[str, Any]],
+        conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         """
         Generate natural-language explanation using Groq LLM backed by verified BNS evidence.
         Falls back safely to structured statutory text if Groq fails or returns empty.
         """
-        llm_res = self._generate_llm_answer(query=query, sections=verified_sections)
+        llm_res = self._generate_llm_answer(
+            query=query,
+            sections=verified_sections,
+            conversation_history=conversation_history,
+        )
         llm_answer = (llm_res.get("answer") or "").strip()
 
         if llm_res.get("success") and llm_answer:
@@ -202,12 +259,17 @@ class LegalAgent:
             f"Displaying verified statutory text fallback.\n\n{grounded_fallback}"
         )
 
-    def ask(self, query: str) -> LegalResponse:
+    def ask(
+        self,
+        query: str,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+    ) -> LegalResponse:
         """
         Process a user's legal question and return a validated LegalResponse.
 
         Args:
             query: The user's input legal question or section reference.
+            conversation_history: Optional bounded conversation history.
 
         Returns:
             Validated Pydantic LegalResponse instance.
@@ -241,8 +303,11 @@ class LegalAgent:
                 is_refusal=True,
             )
 
-        # 3. Check for exact section lookup route
+        # 3. Check for exact section lookup route or conversational follow-up section
         exact_section = self._extract_exact_section(clean_query)
+        if not exact_section and conversation_history:
+            exact_section = self._resolve_conversational_section(clean_query, conversation_history)
+
         if exact_section:
             # Check known bounds: BNS only contains sections 1 to 358
             try:
@@ -302,7 +367,11 @@ class LegalAgent:
                 )
 
             # Validated exact section answer via Groq LLM (with fallback to statutory text)
-            grounded_answer = self._generate_grounded_response_text(clean_query, [db_record])
+            grounded_answer = self._generate_grounded_response_text(
+                clean_query,
+                [db_record],
+                conversation_history=conversation_history,
+            )
             return LegalResponse(
                 query=clean_query,
                 answer=grounded_answer,
@@ -403,7 +472,11 @@ class LegalAgent:
         ]
 
         # Validated semantic retrieval answer via Groq LLM (with fallback to statutory text)
-        grounded_answer = self._generate_grounded_response_text(clean_query, final_sections)
+        grounded_answer = self._generate_grounded_response_text(
+            clean_query,
+            final_sections,
+            conversation_history=conversation_history,
+        )
 
         return LegalResponse(
             query=clean_query,
@@ -413,6 +486,10 @@ class LegalAgent:
             is_refusal=False,
         )
 
-    def __call__(self, query: str) -> LegalResponse:
+    def __call__(
+        self,
+        query: str,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+    ) -> LegalResponse:
         """Make the agent instance directly callable."""
-        return self.ask(query)
+        return self.ask(query, conversation_history=conversation_history)

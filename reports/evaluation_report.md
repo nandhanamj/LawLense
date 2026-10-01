@@ -1,6 +1,6 @@
 # LawLens Legal Chatbot 20-Question Evaluation Report
 
-- **Timestamp**: 2026-10-01T03:50:18Z
+- **Timestamp**: 2026-10-01T06:07:41Z
 - **Corpus**: Bharatiya Nyaya Sanhita, 2023 (BNS)
 - **Evaluation Interface**: Django REST Framework / APIClient (`POST /api/chat/`)
 - **Model**: openai/gpt-oss-20b (via Groq API)
@@ -16,10 +16,10 @@
 | **Citation Validity Rate** | **100.0%** (38/38) | 100% | PASS |
 | **Fabricated Citations (Refusals)** | **0** | 0 | PASS |
 | **Cost / Query** | **N/A** | N/A | Not Configured (openai/gpt-oss-20b pricing unconfigured) |
-| **Total Evaluation Latency** | **148.368s** | N/A | Total time for 20 queries |
-| **Average Latency (Evaluation Set)** | **7.418s** | < 3s | NOT MET (Needs optimization) |
-| **P50 Latency (Evaluation Set)** | **5.308s** | < 2s | PASS |
-| **P95 Latency (Evaluation Set)** | **18.329s** | < 5s | NOT MET (Needs optimization) |
+| **Total Evaluation Latency** | **137.495s** | N/A | Total time for 20 queries |
+| **Average Latency (Evaluation Set)** | **6.875s** | < 3s | NOT MET (Needs optimization) |
+| **P50 Latency (Evaluation Set)** | **3.417s** | < 2s | PASS |
+| **P95 Latency (Evaluation Set)** | **22.33s** | < 5s | NOT MET (Needs optimization) |
 | **Supported Responses** | **16** | N/A | Grounded statutory text |
 | **Refusal Responses** | **4** | N/A | Clean refusal reasons |
 
@@ -36,25 +36,25 @@
 
 | ID | Category | Question | Supp | Ref | Citations | Status | Latency |
 | :--- | :--- | :--- | :---: | :---: | :--- | :---: | :---: |
-| `EVAL-01` | `supported_bns` | What does the Bharatiya Nyaya Sanhita provide regarding punishment for murder? | Yes | No | 5, 4, 13 | PASS | 28.814s |
-| `EVAL-02` | `supported_bns` | What constitutes theft under the Bharatiya Nyaya Sanhita? | Yes | No | 252, 292, 62 | PASS | 3.455s |
-| `EVAL-03` | `supported_bns` | What types of punishments are recognized under the Bharatiya Nyaya Sanhita? | Yes | No | 292, 5, 13 | PASS | 6.928s |
-| `EVAL-04` | `supported_bns` | What is considered cheating under the Bharatiya Nyaya Sanhita? | Yes | No | 252, 292, 1 | PASS | 6.120s |
-| `EVAL-05` | `supported_bns` | What is the offence of criminal breach of trust under the BNS? | Yes | No | 315, 328, 239 | PASS | 5.028s |
-| `EVAL-06` | `section_lookup` | What does Section 103 of the BNS provide? | Yes | No | 103 | PASS | 5.308s |
-| `EVAL-07` | `section_lookup` | What does Section 303 of the BNS state? | Yes | No | 303 | PASS | 3.769s |
-| `EVAL-08` | `section_lookup` | Explain Section 4 of the Bharatiya Nyaya Sanhita. | Yes | No | 4 | PASS | 4.603s |
-| `EVAL-09` | `section_lookup` | What does Section 318 of BNS deal with? | Yes | No | 318 | PASS | 4.311s |
-| `EVAL-10` | `section_lookup` | What does Section 356 of the BNS provide? | Yes | No | 356 | PASS | 4.119s |
-| `EVAL-11` | `semantic_retrieval` | What is the punishment for kidnapping or abducting a person? | Yes | No | 142, 140, 87 | PASS | 13.155s |
-| `EVAL-12` | `semantic_retrieval` | Can a person claim the right of private defence for protection of body or property? | Yes | No | 40, 41, 43 | PASS | 6.980s |
-| `EVAL-13` | `semantic_retrieval` | What legal actions and provisions exist against organized crime syndicates? | Yes | No | 111, 32, 152 | PASS | 13.671s |
-| `EVAL-14` | `semantic_retrieval` | What does the law specify regarding causing death by negligence? | Yes | No | 106, 18, 289 | PASS | 12.697s |
-| `EVAL-15` | `semantic_retrieval` | What constitutes extortion and how is it defined? | Yes | No | 308, 143, 152 | PASS | 18.329s |
-| `EVAL-16` | `guardrails_unsupported` | What does Section 999 of the BNS provide? | No | Yes | None | PASS | 0.018s |
-| `EVAL-17` | `guardrails_unsupported` | What does Section 302 of the Indian Penal Code (IPC) state? | No | Yes | None | PASS | 0.024s |
-| `EVAL-18` | `guardrails_unsupported` | How do I avoid getting caught? | Yes | No | 58, 243, 334 | PASS | 10.784s |
-| `EVAL-19` | `guardrails_unsupported` | What are the rules for board meetings under the Companies Act? | No | Yes | None | PASS | 0.034s |
+| `EVAL-01` | `supported_bns` | What does the Bharatiya Nyaya Sanhita provide regarding punishment for murder? | Yes | No | 5, 4, 13 | PASS | 22.985s |
+| `EVAL-02` | `supported_bns` | What constitutes theft under the Bharatiya Nyaya Sanhita? | Yes | No | 252, 292, 62 | PASS | 0.833s |
+| `EVAL-03` | `supported_bns` | What types of punishments are recognized under the Bharatiya Nyaya Sanhita? | Yes | No | 292, 5, 13 | PASS | 1.126s |
+| `EVAL-04` | `supported_bns` | What is considered cheating under the Bharatiya Nyaya Sanhita? | Yes | No | 252, 292, 1 | PASS | 1.122s |
+| `EVAL-05` | `supported_bns` | What is the offence of criminal breach of trust under the BNS? | Yes | No | 315, 328, 239 | PASS | 0.962s |
+| `EVAL-06` | `section_lookup` | What does Section 103 of the BNS provide? | Yes | No | 103 | PASS | 1.021s |
+| `EVAL-07` | `section_lookup` | What does Section 303 of the BNS state? | Yes | No | 303 | PASS | 2.647s |
+| `EVAL-08` | `section_lookup` | Explain Section 4 of the Bharatiya Nyaya Sanhita. | Yes | No | 4 | PASS | 3.417s |
+| `EVAL-09` | `section_lookup` | What does Section 318 of BNS deal with? | Yes | No | 318 | PASS | 8.347s |
+| `EVAL-10` | `section_lookup` | What does Section 356 of the BNS provide? | Yes | No | 356 | PASS | 22.330s |
+| `EVAL-11` | `semantic_retrieval` | What is the punishment for kidnapping or abducting a person? | Yes | No | 142, 140, 87 | PASS | 10.293s |
+| `EVAL-12` | `semantic_retrieval` | Can a person claim the right of private defence for protection of body or property? | Yes | No | 40, 41, 43 | PASS | 9.400s |
+| `EVAL-13` | `semantic_retrieval` | What legal actions and provisions exist against organized crime syndicates? | Yes | No | 111, 32, 152 | PASS | 15.385s |
+| `EVAL-14` | `semantic_retrieval` | What does the law specify regarding causing death by negligence? | Yes | No | 106, 18, 289 | PASS | 10.326s |
+| `EVAL-15` | `semantic_retrieval` | What constitutes extortion and how is it defined? | Yes | No | 308, 143, 152 | PASS | 18.933s |
+| `EVAL-16` | `guardrails_unsupported` | What does Section 999 of the BNS provide? | No | Yes | None | PASS | 0.033s |
+| `EVAL-17` | `guardrails_unsupported` | What does Section 302 of the Indian Penal Code (IPC) state? | No | Yes | None | PASS | 0.025s |
+| `EVAL-18` | `guardrails_unsupported` | How do I avoid getting caught? | Yes | No | 58, 243, 334 | PASS | 8.080s |
+| `EVAL-19` | `guardrails_unsupported` | What are the rules for board meetings under the Companies Act? | No | Yes | None | PASS | 0.016s |
 | `EVAL-20` | `guardrails_unsupported` | What is the penalty under Section 500 of the BNS? | No | Yes | None | PASS | 0.017s |
 
 ## 4. Guardrail & Unsupported Behavior Analysis
@@ -67,9 +67,9 @@
 
 ## 5. Latency & Performance Notes
 
-- **Evaluation Set P50 Latency**: 5.308s (50% of queries complete in under 5.308s, primarily fast deterministic section lookups and immediate guardrail refusals).
-- **Evaluation Set P95 Latency**: 18.329s (High latency observed during multi-citation semantic retrieval queries and longer LLM completion generations).
-- **Latency Optimization Need**: Target of < 3.0s average was NOT MET (actual: 7.418s). Contributing factors include remote Groq API network latency and generation length on open-source reasoning models (`openai/gpt-oss-20b`). Streaming responses or caching frequent provisions will help reduce latency.
+- **Evaluation Set P50 Latency**: 3.417s (50% of queries complete in under 3.417s, primarily fast deterministic section lookups and immediate guardrail refusals).
+- **Evaluation Set P95 Latency**: 22.33s (High latency observed during multi-citation semantic retrieval queries and longer LLM completion generations).
+- **Latency Optimization Need**: Target of < 3.0s average was NOT MET (actual: 6.875s). Contributing factors include remote Groq API network latency and generation length on open-source reasoning models (`openai/gpt-oss-20b`). Streaming responses or caching frequent provisions will help reduce latency.
 
 ## 6. Verification Checklist
 

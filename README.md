@@ -151,10 +151,10 @@ The latest evaluation is the 20-question BNS set recorded in `reports/evaluation
 | Fabricated citations | 0 |
 | Supported responses / refusals | 16 / 4 |
 | Cost/query | N/A (pricing for `openai/gpt-oss-20b` is not configured) |
-| Average latency | 5.764 s |
-| P50 latency | 1.053 s |
-| P95 latency | 20.295 s |
-| Total latency | 115.271 s |
+| Average latency | 6.875 s |
+| P50 latency | 3.417 s |
+| P95 latency | 22.330 s |
+| Total latency | 137.495 s |
 
 The <3 second average-latency target was **not met**. P50 and P95 are measurements from this 20-question evaluation set.
 
