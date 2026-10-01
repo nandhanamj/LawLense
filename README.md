@@ -1,244 +1,322 @@
 # LawLens
 
-**Citation-grounded legal information for Indian law.** LawLens is an India-focused legal information chatbot. It provides information grounded in cited statutory text; it does not provide legal advice. The current corpus is the Bharatiya Nyaya Sanhita, 2023 (BNS), represented as 358 processed sections.
+**Citation-grounded legal information assistant for the Bharatiya Nyaya Sanhita, 2023 (BNS).**
 
-## Architecture
+LawLens is an India-focused legal information assistant built around a core architectural principle:
+
+> **"The LLM handles language. Tools handle facts, math, and decisions."**
+
+LawLens provides objective legal information grounded in verified statutory text from the Bharatiya Nyaya Sanhita, 2023 (358 processed sections). It does **not** provide personalized legal advice, case predictions, or attorney-client representation.
+
+---
+
+## Architecture Flow
+
+The system coordinates a modern React frontend, a Django REST backend, an orchestrating legal agent, deterministic MySQL tools, vector retrieval, and a grounded LLM:
 
 ```mermaid
 flowchart TD
-  User[User] --> API[Django REST API]
+  User([User]) <--> Frontend[React 19 / Vite SPA]
+  Frontend <-->|POST /api/chat/| API[Django REST API]
+  API <--> Persistence[(MySQL Memory<br/>Conversation & Message)]
   API --> Agent[LegalAgent]
+
+  Agent -->|Harmful / Evasion Request| GuardrailRefusal[Deterministic Refusal]
+  Agent -->|Unsupported Act e.g. IPC| GuardrailRefusal
+  Agent -->|Out-of-range Section >358| GuardrailRefusal
+
   Agent -->|Exact section query| Lookup[Deterministic Section Lookup]
-  Agent -->|Natural-language query| Retriever[Semantic Retriever]
+  Agent -->|Natural-language query| Retriever[Semantic Retriever<br/>multilingual-e5-base]
+
   Retriever -->|Candidate BNS sections| Lookup
-  Lookup -->|Verify section records| DB[(MySQL)]
+  Lookup <-->|Verify Act & Section records| DB[(MySQL Legal Corpus)]
   Lookup --> Validator[Citation Validator]
-  Validator -->|Verified BNS evidence| Evidence[Verified BNS Evidence]
-  Evidence --> Groq[Groq LLM<br/>openai/gpt-oss-20b]
-  Groq --> Response[Pydantic LegalResponse]
-  Response --> APIResponse[API Response]
-  API --> Persistence[Conversation / Message persistence]
-  Persistence --> DB
-  DB -->|Recent messages: context only| Persistence
-  Persistence -->|Conversation context| Agent
+
+  Validator -->|Verified statutory evidence| Groq[Groq LLM<br/>openai/gpt-oss-20b]
+  Validator -->|No verified evidence found| GuardrailRefusal
+
+  Groq -->|Natural-language explanation| Pydantic[Pydantic LegalResponse]
+  GuardrailRefusal -->|Structured refusal reason| Pydantic
+
+  Pydantic --> API
 ```
 
-The API validates the request, loads up to eight recent messages for an existing conversation, persists the user message, calls `LegalAgent`, persists its answer, and returns the serialized response with both conversation identifiers. Recent messages are conversational context only, not legal evidence. Exact section queries use deterministic lookup; natural-language questions retrieve candidate sections before MySQL and `CitationValidator` verification. Only verified evidence is passed to Groq for generation, and verified BNS evidence remains authoritative if conversation context conflicts with it.
+**End-to-End Execution Flow:**
+1. **User interaction**: The user submits a query through the React interface.
+2. **API & Session Handling**: Django's `POST /api/chat/` validates input, retrieves up to 8 recent messages for conversation context, and persists the user message in MySQL.
+3. **LegalAgent Routing**:
+   - **Guardrails**: Rejects evasion requests, unsupported statutes (e.g., IPC), and out-of-range sections deterministically before calling the LLM.
+   - **Deterministic Lookup**: Direct section queries (e.g., "Section 103") query MySQL directly.
+   - **Semantic Retrieval**: Natural-language questions query precomputed BNS vector embeddings using cosine similarity.
+4. **Citation & Evidence Verification**: Candidate provisions are verified against MySQL and checked via `CitationValidator` against stored statutory text.
+5. **Grounded Generation**: Only verified BNS excerpts are provided to the Groq LLM (`openai/gpt-oss-20b`). If the LLM is unreachable or disabled, the agent falls back to verified statutory text.
+6. **Pydantic Validation**: `LegalResponse` validates citations and structural constraints before returning JSON to the client.
+
+---
 
 ## RAG Pipeline
 
-1. `scripts/ingest.py` extracts text from `data/raw/BNS.pdf` into `data/processed/bns_raw.txt`.
-2. `scripts/preprocess.py` structures the extracted text by chapter and section and writes `bns_sections.json` (358 BNS sections in the current corpus).
-3. `scripts/embed.py` uses `intfloat/multilingual-e5-base` to create normalized embeddings and metadata files.
-4. `SemanticRetriever` embeds each query and ranks stored section vectors using cosine similarity (dot product over normalized vectors). The agent requests up to three candidates.
-5. Candidate sections are looked up in MySQL to verify the stored Act and section records. `CitationValidator` then verifies that citations exist and that supporting text matches the stored statutory text.
-6. Only verified BNS evidence is supplied to the Groq LLM. Deterministic tools establish legal facts and evidence; the LLM generates a natural-language explanation grounded in that evidence.
-7. Pydantic `LegalResponse` validates the structured answer and citations, or the agent returns a structured unsupported/refusal response when evidence cannot be verified.
+1. **Ingestion (`scripts/ingest.py`)**: Extracts raw statutory text from the official BNS document (`data/raw/BNS.pdf`) into `data/processed/bns_raw.txt`.
+2. **Preprocessing (`scripts/preprocess.py`)**: Parses the text into structured chapters and sections, creating `data/processed/bns_sections.json` (358 BNS sections).
+3. **Embeddings (`scripts/embed.py`)**: Generates normalized dense vector embeddings using `intfloat/multilingual-e5-base` via `sentence-transformers`, saved as `data/processed/bns_embeddings.npz` with metadata in `bns_metadata.json`.
+4. **Dense Vector Retrieval (`ai/rag/retriever.py`)**: Computes query embeddings with the `"query: "` prefix and performs cosine similarity ranking using NumPy dot products over normalized vectors.
+5. **Deterministic Fact Grounding**: Semantic candidates are cross-checked against MySQL records and validated by `CitationValidator` before language generation.
 
-Retrieval uses the repository's `.npz` embeddings and NumPy; it does not require a running FAISS or Qdrant service. The embedding model's multilingual capability describes the embeddings and does not imply a separately implemented multilingual chat interface.
+*Note: Retrieval relies on local NumPy array computations over `.npz` files and does not require an external vector database service such as FAISS or Qdrant.*
 
-## Agent and Tools
+---
 
-`LegalAgent` handles legal information questions over the BNS corpus. Deterministic tools find and verify legal evidence; Groq generates natural-language answers only after that evidence is verified. When relevant evidence is missing or cannot be verified, the agent returns a structured unsupported/refusal response.
+## Legal Agent and Real Tools
 
-| Component | Responsibility |
-| --- | --- |
-| Section Lookup | Deterministic exact-section lookup and MySQL verification of candidate BNS records. |
-| Semantic Retriever | Finds relevant candidate BNS sections for natural-language questions using precomputed embeddings. |
-| CitationValidator | Verifies citations against the corpus/MySQL and checks supporting text against stored statutory text. |
+The `LegalAgent` (`ai/agent/agent.py`) coordinates three concrete tools implemented in the repository:
 
-Section lookup, semantic retrieval, and citation validation provide deterministic legal facts and evidence. The LLM is used only for natural-language generation after verification.
+| Tool | Implementation | Responsibility |
+| --- | --- | --- |
+| **Deterministic Section Lookup** | `ai/tools/section_lookup.py` | Performs exact-match queries and verifies section existence against the MySQL `legal_section` table. |
+| **Semantic Retriever** | `ai/rag/retriever.py` | Retrieves top-$k$ candidate sections using `multilingual-e5-base` embeddings and cosine similarity. |
+| **Citation Validator** | `ai/tools/citation_validator.py` | Verifies cited sections exist in the corpus and validates supporting evidence against stored statutory text. |
 
-## LLM Generation and Fallback
+Tools provide factual retrieval and statutory validation; the LLM is restricted to synthesizing natural-language explanations.
 
-LawLens uses Groq's `openai/gpt-oss-20b` only after BNS evidence has been retrieved and verified. Its prompt grounds the answer in the supplied statutory text and instructs the model not to invent provisions or citations. Recent conversation messages may be included as dialogue context, but are explicitly not legal evidence. Generated content is informational, not personalized legal advice. If Groq fails or returns an empty answer, the agent displays the verified statutory text instead; provider exceptions are logged internally and are not exposed directly to users. The client logs the model, prompt/completion/total token counts, latency, and cost information. Groq pricing for `openai/gpt-oss-20b` is configured at $0.075 per 1M prompt tokens and $0.30 per 1M completion tokens, yielding a measured evaluation cost of $0.000146 per query.
+---
 
-## Guardrails and Validation
+## Guardrails and Refusal Handling
 
-- Out-of-range or missing BNS sections, including Section 999, are returned as unsupported rather than fabricated.
-- Statutes outside this corpus, including IPC and the Companies Act, are not treated as supported sources; the agent also recognizes other named statutes as unsupported.
-- Evasion and harmful requests are detected deterministically before retrieval or LLM generation. In the latest evaluation, "How do I avoid getting caught?" was refused (`supported=false`, `is_refusal=true`) with zero citations and a refusal reason; the system does not provide evasion guidance.
-- `CitationValidator` checks that cited sections exist in the corpus/MySQL and that supporting evidence matches stored statutory text. Responses without verified evidence are marked unsupported and carry no verified citations.
-- Pydantic validates the structured `LegalResponse` and citation data before the API serializes the response.
+LawLens implements deterministic safety and scope controls prior to retrieval and generation:
 
-These controls reduce unsupported claims but do not guarantee legal correctness.
+- **Evasion & Harmful Request Refusal**: Catches queries seeking instructions on evading arrest, escaping detection, or committing offences (`_detect_evasion_or_harmful_request`). Returns `supported=False`, `is_refusal=True`, and zero citations, while preserving legitimate statutory inquiries (e.g., asking for the penalty for evading arrest).
+- **Unsupported Statute Guardrail**: Inquiries about external statutes (e.g., Indian Penal Code / IPC, Companies Act, CrPC) are refused immediately with an explanation that the corpus is limited to the BNS.
+- **Out-of-Range Section Guardrail**: Requests for nonexistent BNS sections (e.g., Section 999 or Section 500) are refused without fabricating citations.
+- **Unverified Evidence Refusal**: If candidate sections cannot be verified or matched against statutory text, the agent returns a refusal rather than ungrounded claims.
+- **Verified Statutory Fallback**: If Groq is unavailable, the system displays verified statutory text without exposing internal error messages to users.
 
-## Conversation Memory
+---
 
-Django's `Conversation` model stores a unique `session_id`; `Message` stores each user or assistant message, linked to its conversation. MySQL persists these records. A request without an identifier creates a conversation; the response returns both `conversation_id` and `session_id`. Either identifier can be supplied on a later request to append messages to that existing conversation. An unknown supplied identifier returns HTTP 404. For an existing conversation, the API loads up to the eight most recent messages and passes them to `LegalAgent` as conversational context.
+## Pydantic Output Validation
 
-Conversation history helps interpret follow-up references, but is not legal evidence. The LLM prompt labels it as context only and makes verified BNS evidence authoritative; citations must still come from deterministic lookup/retrieval and validation.
+Every response is validated against Pydantic models in `ai/schemas/response.py`:
 
-## REST API
+- **`LegalResponse`**: Enforces business constraints:
+  - Supported answers must contain at least one verified `Citation`.
+  - Refusals and unsupported responses must have `supported=False`, `is_refusal=True`, and zero citations.
+  - Section representations are normalized consistently.
+- **`Citation`**: Validates the Act name (`BNS`), normalized section identifier, title, statutory excerpt, and source metadata.
 
-`POST /api/chat/` accepts a non-empty query and optionally an existing conversation identifier.
+---
 
+## Conversational Memory
+
+- **Persistence Layer**: Django models `Conversation` and `Message` in `backend/conversations/models.py` store multi-turn chat sessions in MySQL.
+- **Session Identification**: Requests accept either `conversation_id` or `session_id`. Initial queries generate a new UUID; subsequent queries pass the ID to continue the conversation.
+- **Context vs. Evidence Boundary**: The API loads up to the 8 most recent messages chronologically. This history is passed to the agent as dialogue context only and is explicitly labeled as non-evidential. Verified BNS evidence remains strictly authoritative.
+
+---
+
+## LLM Integration & Cost Tracking
+
+- **Provider & Model**: Groq API using `openai/gpt-oss-20b`.
+- **System Prompting**: Constrains output to the provided BNS excerpts and instructs the model not to invent legal provisions.
+- **Usage & Cost Tracking**: Captures prompt tokens, completion tokens, total tokens, latency, and estimated cost calculated in `ai/llm/pricing.py`.
+- **Configured Pricing**:
+  - Prompt tokens: $0.075 per 1,000,000 tokens
+  - Completion tokens: $0.30 per 1,000,000 tokens
+  - Measured historical evaluation cost: **$0.000146 per query** ($0.002928 across 20 evaluation queries).
+
+---
+
+## REST API Specification
+
+### Endpoint: `POST /api/chat/`
+
+**Request Headers:** `Content-Type: application/json`
+
+**Request Body (Initial Query):**
 ```json
 {
-  "query": "What does Section 103 of the BNS provide?",
-  "conversation_id": "optional-uuid-or-session-id"
+  "query": "What does Section 103 of the BNS provide?"
 }
 ```
 
-`session_id` is also accepted. If either identifier is provided, it must already exist; omit both to start a conversation. A successful response includes the answer, support/refusal fields, citations, `conversation_id`, and `session_id`.
-
-PowerShell example, with the Django server running locally:
-
-```powershell
-$body = @{ query = "What does Section 103 of the BNS provide?" } | ConvertTo-Json
-$response = Invoke-RestMethod `
-  -Method Post `
-  -Uri "http://127.0.0.1:8000/api/chat/" `
-  -ContentType "application/json" `
-  -Body $body
-$response
+**Request Body (Follow-Up Query):**
+```json
+{
+  "query": "What is the punishment specified in this section?",
+  "conversation_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+}
 ```
 
-To continue that conversation, include `$response.session_id` as `conversation_id` or `session_id` in the next request.
+**Response Body (Supported Answer):**
+```json
+{
+  "query": "What does Section 103 of the BNS provide?",
+  "answer": "Section 103 of the Bharatiya Nyaya Sanhita, 2023 deals with punishment for murder...",
+  "supported": true,
+  "citations": [
+    {
+      "act": "BNS",
+      "section": "103",
+      "title": "Punishment for murder",
+      "supporting_text": "Whoever commits murder shall be punished with death or imprisonment for life...",
+      "source": "Bharatiya Nyaya Sanhita, 2023"
+    }
+  ],
+  "refusal_reason": null,
+  "is_refusal": false,
+  "language": "en",
+  "conversation_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "session_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+}
+```
 
-## Setup
+**Response Body (Refusal):**
+```json
+{
+  "query": "What does Section 999 of the BNS provide?",
+  "answer": "Section 999 does not exist in the BNS legal corpus...",
+  "supported": false,
+  "citations": [],
+  "refusal_reason": "Section 999 does not exist in the BNS legal corpus.",
+  "is_refusal": true,
+  "language": "en",
+  "conversation_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "session_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+}
+```
 
-Docker Compose is the recommended reproducible setup. A native Python/MySQL setup is also available below. Set `GROQ_API_KEY` to enable Groq-generated answers; without it, supported answers use the verified statutory-text fallback.
+---
 
-### Docker Compose
+## Frontend Application
 
-Prerequisites: Docker with the Compose plugin and the repository's BNS PDF at `data/raw/BNS.pdf`. Set `GROQ_API_KEY` in the environment if using Groq, then run these commands from the repository root:
+The user interface in `frontend/` is a lightweight Single-Page Application (SPA) built with:
+- **React 19, TypeScript, and Vite 8**
+- **Lucide React** for legal iconography
+- **Custom CSS Design Tokens**: Deep navy (`#0B132B`), warm slate, and accessible high-contrast text.
 
-```powershell
+### Key Features:
+- **Hero Landing Screen**: Displays system capabilities and 6 suggested legal queries.
+- **Interactive Citation Cards**: Collapsible cards displaying Act, Section, Title, verbatim statutory excerpts, and one-click clipboard copying.
+- **High-Contrast User Bubbles**: High-contrast text on dark navy message bubbles exceeding WCAG AAA standards.
+- **Refusal Banners**: Clear, neutral scope notices when queries cannot be answered from the BNS corpus.
+- **Session Memory & Reset**: Maintains the active `conversation_id` across turns and provides a "New Conversation" button to clear state.
+- **Development Proxy**: Vite dev server reverse proxies `/api/*` to the Django backend to eliminate local CORS friction.
+
+---
+
+## Docker & Container Architecture
+
+- **`Dockerfile`**: Single-stage build based on `python:3.11-slim` installing MySQL client and build dependencies, PyMuPDF, and project requirements.
+- **`docker-compose.yml`**: Defines two services:
+  - `db`: MySQL 8.0 with persistent volume storage and health checks.
+  - `web`: Django application container waiting on MySQL health before starting.
+- **`docker/entrypoint.sh`**: Verifies database connectivity, executes database migrations, seeds BNS sections if missing, and starts the server.
+
+*Technical Caveats: The Docker setup is configured for local evaluation and containerization. Inference is executed entirely on CPU (no GPU acceleration configured). Initial image builds require downloading PyTorch and embedding weights. The application has not been deployed to any remote production cloud environment.*
+
+---
+
+## Evaluation Results
+
+The repository includes a checked-in 20-question reproducible evaluation recorded in `reports/evaluation_results.json` and `reports/evaluation_report.md` (historical run timestamp: `2026-10-01T09:25:31Z`):
+
+| Metric | Historical Recorded Result | Evaluation Target | Status |
+| :--- | :---: | :---: | :---: |
+| **Questions Passed** | **20 / 20** | 20 / 20 | PASS (100.0%) |
+| **Failure Rate** | **0.0%** | 0.0% | PASS |
+| **Pydantic Compliance** | **100.0%** (20/20) | 100.0% | PASS |
+| **Citation Validity Rate** | **100.0%** (35/35 citations) | 100.0% | PASS |
+| **Fabricated Citations** | **0** | 0 | PASS |
+| **Cost Per Query** | **$0.000146** | N/A | Actual token usage via Groq |
+| **Total Evaluation Cost** | **$0.002928** | N/A | Total across 20 questions |
+| **Average Latency** | **6.564s** | < 3s | NOT MET |
+| **P50 Latency** | **1.477s** | < 2s | PASS |
+| **P95 Latency** | **22.533s** | < 5s | NOT MET |
+
+*Note: These figures reflect the checked-in historical evaluation dataset of 20 benchmark questions. Latency varies depending on local CPU embedding generation and Groq API response times.*
+
+---
+
+## Local Setup & Quickstart
+
+### Prerequisites
+- Python 3.10+ (tested on Python 3.11)
+- MySQL Server 8.0+
+- Node.js v18+ and npm v9+ (for frontend)
+- Groq API Key (optional, enables LLM explanations; fallback displays statutory text)
+
+### Backend Setup (Native)
+
+1. **Clone and create virtual environment:**
+   ```bash
+   git clone <repo-url>
+   cd LawLense
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .\.venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   ```
+
+2. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, and GROQ_API_KEY
+   ```
+
+3. **Generate processed corpus & embeddings (if not already present):**
+   ```bash
+   python scripts/ingest.py
+   python scripts/preprocess.py
+   python scripts/embed.py
+   ```
+
+4. **Run database migrations and seed the BNS corpus:**
+   ```bash
+   cd backend
+   python manage.py migrate
+   python manage.py seed_bns
+   python manage.py runserver
+   ```
+   *The backend will be available at `http://127.0.0.1:8000`.*
+
+### Frontend Setup
+
+1. **Install dependencies and launch Vite:**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   *The frontend will be available at `http://localhost:5173`.*
+
+### Docker Compose Setup (Alternative)
+
+```bash
 docker compose build
 docker compose up
 ```
 
-Compose starts MySQL 8.0 and Django, waits for MySQL's health check, and provides persistent MySQL data and Hugging Face cache volumes. The web entrypoint prepares missing corpus or embedding files, runs migrations, seeds the 358 BNS sections, and starts Django. The API is available locally at `http://127.0.0.1:8000/api/chat/`.
+---
 
-### Native Setup
+## Verification & Testing
 
-Prerequisites: Python, a running MySQL server, and a MySQL database matching the configured `DB_NAME`.
+- **Backend tests:**
+  ```bash
+  python backend/manage.py test conversations
+  ```
+  *(8 tests verifying API chat flow, session memory, guardrails, and refusal formatting).*
+- **Frontend lint & build:**
+  ```bash
+  cd frontend
+  npm run lint
+  npm run build
+  ```
+- **Evaluation suite:**
+  ```bash
+  python scripts/evaluate.py
+  ```
 
-From the repository root, create and activate a virtual environment, install dependencies, and prepare the environment file:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-Copy-Item .env.example .env
-```
-
-Set `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and `DB_PORT` in `.env` for your MySQL instance, and add `GROQ_API_KEY` if you want Groq-generated answers. `requirements.txt` includes the Django, REST framework, MySQL, PDF processing, embedding, and Groq dependencies.
-
-If the processed corpus files are not present, generate them from the included BNS PDF from the repository root. Embedding generation downloads the configured model the first time if it is not cached.
-
-```powershell
-python scripts/ingest.py
-python scripts/preprocess.py
-python scripts/embed.py
-```
-
-Then run Django management commands from `backend`:
-
-```powershell
-Set-Location backend
-python manage.py check
-python manage.py migrate
-python manage.py seed_bns
-python manage.py runserver
-```
-
-The local API is then available at `http://127.0.0.1:8000/api/chat/`.
-
-## BNS Database Seeding
-
-Run `python manage.py seed_bns` from `backend`. The command loads `data/processed/bns_sections.json` into the MySQL `Act` and `Section` tables. It uses `get_or_create` for the BNS Act and `update_or_create` for each section, so rerunning it updates existing records rather than creating duplicate section rows. The current input contains 358 BNS sections.
-
-## Evaluation
-
-The latest evaluation is the 20-question BNS set recorded in `reports/evaluation_results.json` and `reports/evaluation_report.md` (timestamp `2026-10-01T09:25:31Z`). These are evaluation-set measurements, not a guarantee of legal correctness or production performance.
-
-| Measure | Recorded result |
-| --- | ---: |
-| Questions total / passed / failed | 20 / 20 / 0 |
-| Overall accuracy | 100% |
-| Failure rate | 0% |
-| Supported responses / refusals | 15 / 5 |
-| Pydantic schema compliance | 100% |
-| Citation presence on supported answers | 100% |
-| Citation validity | 100% (35/35) |
-| Fabricated citations | 0 |
-| Cost/query | $0.000146 (configured: $0.075/1M prompt, $0.30/1M completion) |
-| Average latency | 6.564 s |
-| P50 latency | 1.477 s (target <2 s: met) |
-| P95 latency | 22.533 s (target <5 s: not met) |
-| Total latency | 131.272 s |
-
-The average-latency target of <3 seconds was **not met**. P50 and P95 are measurements from this 20-question evaluation set.
-
-| Category | Passed |
-| --- | ---: |
-| Supported BNS questions | 5/5 (100%) |
-| Exact section lookup | 5/5 (100%) |
-| Semantic retrieval | 5/5 (100%) |
-| Guardrails and unsupported questions | 5/5 (100%) |
-
-Each category passed 5/5 questions. The guardrail cases include Sections 999 and 500, IPC, the Companies Act, and the evasion-oriented query described above.
-
-## Tests
-
-Run from `backend`:
-
-```powershell
-python manage.py test conversations
-```
-
-The current Django conversation test suite contains 8 tests; all 8 pass.
-
-## Hackathon Demo Flow
-
-1. Run `docker compose build` and `docker compose up` from the repository root, with `GROQ_API_KEY` set if using Groq. Alternatively, start MySQL and use the native setup.
-2. Ask a normal BNS question to demonstrate semantic retrieval and a Groq-generated answer grounded in verified evidence.
-3. Ask an exact section question, such as Section 103, and show its validated citation.
-4. Continue a conversation with a follow-up question to demonstrate recent-message context, then show that context does not replace verified legal evidence.
-5. Ask for Section 999 and an unsupported statute such as IPC or the Companies Act; show the refusal and absence of verified citations.
-6. Ask "How do I avoid getting caught?" and show the deterministic refusal with zero citations and no evasion guidance.
-7. Demonstrate the verified-statutory-text fallback if Groq generation fails or returns an empty response.
-8. Show citations, token/latency/cost logging (configured at $0.075/1M prompt, $0.30/1M completion; ~$0.000146/query), and the evaluation metrics above.
-
-## Project Structure
-
-```text
-.
-|-- ai/
-|   |-- agent/                 # LegalAgent
-|   |-- llm/                   # Groq client and pricing helper
-|   |-- rag/                   # SemanticRetriever
-|   |-- schemas/               # Pydantic response and citation schemas
-|   `-- tools/                 # Section lookup and citation validator
-|-- backend/
-|   |-- config/                # Django settings and URL configuration
-|   |-- conversations/         # Chat endpoint, models, serializers, tests
-|   |-- legal/                 # Act/Section models and seed_bns command
-|   `-- manage.py
-|-- data/
-|   |-- raw/BNS.pdf
-|   `-- processed/             # Extracted text, sections, embeddings, metadata
-|-- docker/
-|   `-- entrypoint.sh
-|-- .dockerignore
-|-- Dockerfile
-|-- docker-compose.yml
-|-- eval/questions.json
-|-- reports/                   # Evaluation report and results
-|-- scripts/                   # Ingestion, preprocessing, embedding, evaluation
-|-- tests/
-|-- .env.example
-`-- requirements.txt
-```
+---
 
 ## Limitations and Legal Disclaimer
 
-- The current legal corpus is focused on the BNS. Laws outside the available corpus are not treated as supported legal sources.
-- Retrieval and evaluation quality depend on the available corpus, generated embeddings, and the size and coverage of the evaluation set.
-- Files under `data/processed/`, including embedding artifacts, may be generated locally and are ignored by Git; regenerate them with the scripts above when needed.
-- The corpus is based on the repository's BNS PDF at `data/raw/BNS.pdf`. Applicable license or source terms are not documented in this repository and should be verified and documented; no license is asserted here.
-- The chatbot provides informational legal content, not a determination of how a law applies to a specific case.
-
-> LawLens provides citation-grounded legal information for informational purposes only and does not provide legal advice. Users should consult a qualified legal professional for advice about their specific circumstances.
+1. **Corpus Scope**: Limited strictly to the 358 sections of the Bharatiya Nyaya Sanhita, 2023. Other major acts (BNSS, BSA, IPC, CrPC, Special/Local Laws) are not indexed.
+2. **Data Source & Licensing**: The statutory text is derived from `data/raw/BNS.pdf`. The repository does not assert copyright over official statutory text, and formal upstream licensing terms remain unverified.
+3. **No Legal Advice**: LawLens is an automated informational retrieval tool. It does not provide legal advice, representation, or authoritative case evaluations. Users must consult qualified legal professionals for real-world legal matters.
